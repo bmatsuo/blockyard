@@ -28,8 +28,6 @@ func main() {
 		panic(err)
 	}
 
-	rBlockPath := regexp.MustCompile("(/[a-zA-Z0-9-_]+)+")
-
 	statdaemon := stat.NewRuntimeStatDaemon(30 * time.Second)
 	err = statdaemon.Start()
 	if err != nil {
@@ -37,10 +35,34 @@ func main() {
 	}
 	defer statdaemon.Stop()
 
+	logger.Notice(fmt.Sprint("serving HTTP at ", ":8080"))
+	httpserver, err := NewHTTPServerAddr(":8080")
+	if err != nil {
+		panic(err)
+	}
+	httpserver.Handler = Routes()
+
+	serveErrs := httpserver.Serve()
+
+	httpErrorLogger, err := log.NewSyslog(syslog.LOG_NOTICE, "http.server_error")
+	if err != nil {
+		panic(err)
+	}
+	for err := range serveErrs {
+		httpErrorLogger.Err(err.Error())
+	}
+
+	err = http.ListenAndServe(":8080", http.DefaultServeMux)
+	logger.Err(err.Error())
+}
+
+func Routes() http.Handler {
 	accesslogger, err := log.NewSyslog(syslog.LOG_NOTICE, "access")
 	if err != nil {
 		panic(err)
 	}
+
+	rBlockPath := regexp.MustCompile("(/[a-zA-Z0-9-_]+)+")
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		method, path := req.Method, req.URL.Path
@@ -56,9 +78,8 @@ func main() {
 			http.NotFound(resp, req)
 		}
 	})
-	logger.Notice(fmt.Sprint("serving HTTP at ", ":8080"))
-	err = http.ListenAndServe(":8080", http.DefaultServeMux)
-	logger.Err(err.Error())
+
+	return http.DefaultServeMux
 }
 
 func GetBlock(resp http.ResponseWriter, req *http.Request) {
