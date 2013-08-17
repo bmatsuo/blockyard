@@ -11,6 +11,7 @@ package log
 
 import (
 	"log"
+	"os"
 	"time"
 
 	//"code.google.com/p/goprotobuf/proto"
@@ -18,7 +19,7 @@ import (
 	"github.com/bmatsuo/go-syslog/rsyslog"
 )
 
-var SyslogBase = "blockd"
+var SyslogBase = os.Args[0]
 var SyslogFacility = syslog.LOG_LOCAL3
 
 func NewSyslog(pri syslog.Priority, name string) (*syslog.Writer, error) {

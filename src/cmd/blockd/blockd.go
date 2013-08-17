@@ -22,22 +22,25 @@ import (
 )
 
 func main() {
+	log.SyslogBase = "blockd"
 	logger, err := log.NewSyslog(syslog.LOG_NOTICE, "")
 	if err != nil {
 		panic(err)
 	}
+
 	rBlockPath := regexp.MustCompile("(/[a-zA-Z0-9-_]+)+")
 
-	accesslogger, err := log.NewSyslog(syslog.LOG_NOTICE, "access")
-	if err != nil {
-		panic(err)
-	}
 	statdaemon := stat.NewRuntimeStatDaemon(30 * time.Second)
 	err = statdaemon.Start()
 	if err != nil {
 		panic(err)
 	}
 	defer statdaemon.Stop()
+
+	accesslogger, err := log.NewSyslog(syslog.LOG_NOTICE, "access")
+	if err != nil {
+		panic(err)
+	}
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		method, path := req.Method, req.URL.Path
