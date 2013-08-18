@@ -1,28 +1,58 @@
+[1]: http://www.raspberrypi.org "Raspberry Pi homepage"
+[2]: # "Architecture"
+
 Blockyard
 =========
 
-Lightweight block storage
+Blockyard is a lightweight distributed file system designed to run on
+[Raspberry Pi][1].
+
+Yard is a shell script for building binaries and deploying blockyard
+components to [Raspberry Nodes][2].
 
 Usage
------
+=====
 
-Blockyard does not support installation through `go install` for deployment
-easy and stability. Instead clone the repository and use the `blockyard` tool
-to build executables.
+The yard script must be executed inside a clone of the blockyard
+repository.
 
     git clone git@github.com:bmatsuo/blockyard
     cd blockyard
-    ./blockyard build
+
+Invoke the yard command as
+
+    ./yard COMMAND [OPTIONS] [ARGUMENTS]
+
+Build
+-----
+
+Build a the blockyard binaries.
+
+    ./yard build [OS] [ARCH]
+
+Dist
+----
+
+Create a distribution tar.gz file.
+
+    ./yard dist [OS] [ARCH]
+
+Deploy
+------
+
+Deploy to a node via ssh.
+
+    ./yard deploy HOSTNAME DIST_ID
 
 Docs
 ----
 
-    ./blockyard docs [ -http=LADDR | IMPORT TAG ]
+    ./yard docs [ -http=LADDR | IMPORT TAG ]
 
 ###Examples
 
-    ./blockyard docs -http=:6060
-    ./blockyard docs schuntil/log NewSyslog
+    ./yard docs -http=:6060
+    ./yard docs schuntil/log NewSyslog
 
 Author
 ------
