@@ -39,7 +39,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer statdaemon.Stop()
 
 	logger.Notice(fmt.Sprint("serving HTTP at ", ":8080"))
 	httpserver, err := NewHTTPServerAddr(":8080")
@@ -82,6 +81,11 @@ func main() {
 			if err != nil {
 				logger.Notice(fmt.Sprintf("error shutting down http server: %s", err))
 				continue
+			}
+
+			err = statdaemon.Stop()
+			if err != nil {
+				logger.Notice(fmt.Sprintf("error shutting down stat daemon: %s", err))
 			}
 
 			signal.Stop(sigch)
