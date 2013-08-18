@@ -1,5 +1,10 @@
 #!/bin/bash
 
-GOPATH=${PWD}
+function docs() {
+    export GOPATH=${PWD}
+    godoc $@
+}
 
-godoc $@
+if [[ -z "${BLOCKYARD_SCRIPT+x}" ]]; then
+    docs $@
+fi
