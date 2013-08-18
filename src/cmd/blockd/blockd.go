@@ -13,6 +13,7 @@ import (
 	"github.com/bmatsuo/go-syslog"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 	"schnutil/log"
 	"schnutil/stat"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -59,6 +61,12 @@ func main() {
 
 		var err error
 		for err = range serveErrs {
+			if operr, ok := err.(*net.OpError); ok {
+				if -1 < strings.Index(operr.Err.Error(), "use of closed network connection") {
+					err = nil
+					continue
+				}
+			}
 			httpErrorLogger.Err(err.Error())
 		}
 
@@ -72,7 +80,7 @@ func main() {
 			logger.Notice(fmt.Sprintf("received signal: %s", sig))
 			err := httpserver.Close()
 			if err != nil {
-				logger.Notice(fmt.Sprintf("error shutting down http server: %s", sig))
+				logger.Notice(fmt.Sprintf("error shutting down http server: %s", err))
 				continue
 			}
 
