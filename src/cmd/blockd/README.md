@@ -1,14 +1,20 @@
-[godoc.org]: http://godoc.org/github.com/bmatsuo/blockd/ "godoc.org"
+[install]: http://github.com/bmatsuo/blockyard#install "install"
+[docs]: http://github.com/bmatsuo/blockyard#docs "docs"
 
 Install
 =======
 
-    go get github.com/bmatsuo/blockd
+Refer to the [Blockyard README][install]
+
+Usage
+=====
+
+    ./bin/blockd
 
 Docs
 ====
 
-On [godoc.org][]
+Refer to the [Blockyard README][docs]
 
 Author
 ======
