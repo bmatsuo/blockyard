@@ -13,7 +13,6 @@ import (
 	"github.com/bmatsuo/go-syslog"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,7 +20,6 @@ import (
 	"schnutil/log"
 	"schnutil/stat"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -55,56 +53,65 @@ func main() {
 	signal.Notify(sigch, os.Interrupt, syscall.SIGTERM)
 
 	httpdone := make(chan error, 1)
+	defer func() {
+		err = <-httpdone
+		if err != nil {
+			logger.Crit(err.Error())
+			os.Exit(1)
+		}
+	}()
 	go func() {
 		serveErrs := httpserver.Serve()
 
 		var err error
 		for err = range serveErrs {
-			if operr, ok := err.(*net.OpError); ok {
-				if -1 < strings.Index(operr.Err.Error(), "use of closed network connection") {
-					err = nil
-					continue
-				}
+			if IsClose(err) {
+				err = nil
+			} else {
+				httpErrorLogger.Err(err.Error())
 			}
-			httpErrorLogger.Err(err.Error())
 		}
 
 		httpdone <- err
+		close(httpdone)
 	}()
 	logger.Notice(fmt.Sprintf("serving http traffic on %s", httpserver.listener.Addr()))
 
 	done := make(chan error, 1)
+	defer func() {
+		err = <-done
+		if err != nil {
+			logger.Crit(err.Error())
+			os.Exit(1)
+		}
+	}()
 	go func() {
+		var err error
+		defer func() {
+			done <- err
+			close(done)
+		}()
+
 		for sig := range sigch {
 			logger.Notice(fmt.Sprintf("received signal: %s", sig))
-			err := httpserver.Close()
+
+			err = httpserver.Close()
 			if err != nil {
-				logger.Notice(fmt.Sprintf("error shutting down http server: %s", err))
-				continue
+				logger.Crit(fmt.Sprintf("error shutting down http server: %s", err))
+				done <- err
 			}
 
 			err = statdaemon.Stop()
 			if err != nil {
+				// this is not a critical error
 				logger.Notice(fmt.Sprintf("error shutting down stat daemon: %s", err))
+				err = nil
 			}
 
 			signal.Stop(sigch)
 			break
 		}
-		done <- nil
 	}()
-
-	err = <-done
-	if err != nil {
-		logger.Crit(err.Error())
-		os.Exit(1)
-	}
-
-	err = <-httpdone
-	if err != nil {
-		logger.Crit(err.Error())
-		os.Exit(1)
-	}
 
 	logger.Notice("shut down complete")
 	os.Exit(0)

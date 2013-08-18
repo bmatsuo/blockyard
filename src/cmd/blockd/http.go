@@ -9,6 +9,7 @@ package main
 import (
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -16,6 +17,17 @@ type HTTPServer struct {
 	Handler    http.Handler
 	listener   net.Listener
 	waitactive *sync.WaitGroup
+}
+
+func IsClose(err error) bool {
+	if operr, ok := err.(*net.OpError); ok {
+		errmsg := operr.Err.Error()
+		if -1 < strings.Index(errmsg, "use of closed network connection") {
+			err = nil
+			return true
+		}
+	}
+	return false
 }
 
 func NewHTTPServerAddr(laddr string) (*HTTPServer, error) {
