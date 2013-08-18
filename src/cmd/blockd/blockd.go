@@ -5,7 +5,7 @@
 // blockd.go [created: Wed, 14 Aug 2013]
 
 /*
-A REST block storage service. Blockd is design to be a node in a distributed
+A REST block storage service. Blockd is designed to be a node in a distributed
 file system. The blocks it store are parts of files. But, the entire file is
 rarely stored entirely on one node. Blockd nodes are ignorant about the presence
 of any other blockd nodes.
@@ -31,12 +31,16 @@ import (
 )
 
 func main() {
-
 	log.SyslogBase = "blockd"
 	logger, err := log.NewSyslog(syslog.LOG_NOTICE, "")
 	if err != nil {
 		panic(err)
 	}
+
+	defer func() {
+		logger.Notice("shut down complete")
+		os.Exit(0)
+	}()
 
 	statdaemon := stat.NewRuntimeStatDaemon(30 * time.Second)
 	err = statdaemon.Start()
@@ -60,16 +64,22 @@ func main() {
 
 	httpdone := make(chan error, 1)
 	defer func() {
-		err = <-httpdone
-		if err != nil {
-			logger.Crit(err.Error())
-			os.Exit(1)
+		for err := range httpdone {
+			if err != nil {
+				logger.Crit(err.Error())
+				os.Exit(1)
+			}
 		}
 	}()
 	go func() {
+		var err error
+		defer func() {
+			httpdone <- err
+			close(httpdone)
+		}()
+
 		serveErrs := httpserver.Serve()
 
-		var err error
 		for err = range serveErrs {
 			if IsClose(err) {
 				err = nil
@@ -77,18 +87,16 @@ func main() {
 				httpErrorLogger.Err(err.Error())
 			}
 		}
-
-		httpdone <- err
-		close(httpdone)
 	}()
 	logger.Notice(fmt.Sprintf("serving http traffic on %s", httpserver.listener.Addr()))
 
 	done := make(chan error, 1)
 	defer func() {
-		err = <-done
-		if err != nil {
-			logger.Crit(err.Error())
-			os.Exit(1)
+		for err = range done {
+			if err != nil {
+				logger.Crit(err.Error())
+				os.Exit(1)
+			}
 		}
 	}()
 	go func() {
@@ -118,9 +126,6 @@ func main() {
 			break
 		}
 	}()
-
-	logger.Notice("shut down complete")
-	os.Exit(0)
 }
 
 func Routes() http.Handler {
