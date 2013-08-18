@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime"
 	"schnutil/log"
 	"schnutil/stat"
 	"strconv"
@@ -38,8 +39,29 @@ func main() {
 	}
 
 	defer func() {
-		logger.Notice("shut down complete")
-		os.Exit(0)
+		if e := recover(); e != nil {
+			logger.Crit("unhandled runtime panic: " + fmt.Sprint(e))
+			callers := make([]uintptr, 20)
+			n := runtime.Callers(1, callers)
+			for i := 0; i < n; i++ {
+				pc := callers[i]
+				fn := runtime.FuncForPC(pc)
+				if fn == nil {
+					logger.Crit(fmt.Sprintf("[i] unknown FuncForPC: %v", i, pc))
+				} else {
+					name := fn.Name()
+					file, line := fn.FileLine(pc)
+					offset := pc - fn.Entry()
+					frame := fmt.Sprintf("[%d] %s (%s:%v) +0x%X",
+						i, name, file, line, offset)
+					logger.Notice(frame)
+				}
+			}
+			os.Exit(1)
+		} else {
+			logger.Notice("shut down complete")
+			os.Exit(0)
+		}
 	}()
 
 	statdaemon := stat.NewRuntimeStatDaemon(30 * time.Second)
