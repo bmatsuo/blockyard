@@ -9,11 +9,13 @@ package main
 import (
 	"net"
 	"net/http"
+	"sync"
 )
 
 type HTTPServer struct {
-	Handler  http.Handler
-	listener net.Listener
+	Handler    http.Handler
+	listener   net.Listener
+	waitactive *sync.WaitGroup
 }
 
 func NewHTTPServerAddr(laddr string) (*HTTPServer, error) {
@@ -27,6 +29,7 @@ func NewHTTPServerAddr(laddr string) (*HTTPServer, error) {
 func NewHTTPServer(listnr net.Listener) *HTTPServer {
 	server := new(HTTPServer)
 	server.listener = listnr
+	server.waitactive = new(sync.WaitGroup)
 	return server
 }
 
@@ -39,7 +42,12 @@ func (server *HTTPServer) Serve() <-chan error {
 
 		_server := new(http.Server)
 
-		_server.Handler = server.Handler
+		_server.Handler = http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+			server.waitactive.Add(1)
+			defer server.waitactive.Done()
+
+			server.Handler.ServeHTTP(resp, req)
+		})
 
 		err := _server.Serve(server.listener)
 		if err != nil {
@@ -50,5 +58,7 @@ func (server *HTTPServer) Serve() <-chan error {
 }
 
 func (server *HTTPServer) Close() error {
-	return server.listener.Close() // *net.Listener is threadsafe
+	err := server.listener.Close() // *net.Listener is threadsafe
+	server.waitactive.Wait()
+	return err
 }
