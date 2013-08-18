@@ -25,7 +25,7 @@ TARGET="${SCRIPT_SRC}/${COMMAND}.sh"
 if [[ -x ${TARGET} ]]; then
     TARGET_ARGS=${ARGS[@]:1}
 
-    "${TARGET}" ${TARGET_ARGS}
+    ${COMMAND} ${TARGET_ARGS}
 else
     echo "not a command: $COMMAND"
     exit 1
