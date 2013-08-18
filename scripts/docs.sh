@@ -1,7 +1,6 @@
 #!/bin/bash
 
 function docs() {
-    export GOPATH=${PWD}
     godoc $@
 }
 

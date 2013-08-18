@@ -13,13 +13,13 @@ Usage
 Docs
 ====
 
-    ./docs.sh [ -http=LADDR | IMPORT TAG ]
+    ./blockyard docs [ -http=LADDR | IMPORT TAG ]
 
 Examples
 --------
 
-    ./docs.sh -http=:6060
-    ./docs.sh schuntil/log NewSyslog
+    ./blockyard docs -http=:6060
+    ./blockyard docs schuntil/log NewSyslog
 
 Author
 ======
