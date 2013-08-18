@@ -3,7 +3,7 @@ Install
 
     git clone git@github.com:bmatsuo/blockyard
     cd blockyard
-    ./build.sh
+    ./blockyard build
 
 Usage
 =====
