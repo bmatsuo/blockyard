@@ -4,6 +4,12 @@
 
 // blockd.go [created: Wed, 14 Aug 2013]
 
+/*
+A REST block storage service. Blockd is design to be a node in a distributed
+file system. The blocks it store are parts of files. But, the entire file is
+rarely stored entirely on one node. Blockd nodes are ignorant about the presence
+of any other blockd nodes.
+*/
 package main
 
 import (

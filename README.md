@@ -19,7 +19,6 @@ Examples
 --------
 
     ./docs.sh -http=:6060
-    ./docs.sh cmd/blockyard
     ./docs.sh schuntil/log NewSyslog
 
 Author
