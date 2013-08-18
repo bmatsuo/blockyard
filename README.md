@@ -1,14 +1,26 @@
-[godoc.org]: http://godoc.org/github.com/bmatsuo/schnoodle/ "godoc.org"
-
 Install
 =======
 
-    go get github.com/bmatsuo/schnoodle
+    git clone git@github.com:bmatsuo/blockyard
+    cd blockyard
+    ./build.sh
+
+Usage
+=====
+
+    ./bin/blockd
 
 Docs
 ====
 
-On [godoc.org][]
+    ./docs.sh [ -http=LADDR | IMPORT TAG ]
+
+Examples
+--------
+
+    ./docs.sh -http=:6060
+    ./docs.sh cmd/blockyard
+    ./docs.sh schuntil/log NewSyslog
 
 Author
 ======
