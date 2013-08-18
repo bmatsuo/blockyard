@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_SRC="${PWD}"
+SCRIPT_SRC="${PWD}/scripts"
 
 if [[ "$#" < 1 ]]; then
    echo 1>&2  'missing argument [command]'
