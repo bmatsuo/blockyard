@@ -14,14 +14,18 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"os/signal"
 	"regexp"
 	"schnutil/log"
 	"schnutil/stat"
 	"strconv"
+	"syscall"
 	"time"
 )
 
 func main() {
+
 	log.SyslogBase = "blockd"
 	logger, err := log.NewSyslog(syslog.LOG_NOTICE, "")
 	if err != nil {
@@ -41,19 +45,57 @@ func main() {
 		panic(err)
 	}
 	httpserver.Handler = Routes()
-
-	serveErrs := httpserver.Serve()
-
 	httpErrorLogger, err := log.NewSyslog(syslog.LOG_NOTICE, "http.server_error")
 	if err != nil {
 		panic(err)
 	}
-	for err := range serveErrs {
-		httpErrorLogger.Err(err.Error())
+
+	sigch := make(chan os.Signal, 2)
+	signal.Notify(sigch, os.Interrupt, syscall.SIGTERM)
+
+	httpdone := make(chan error, 1)
+	go func() {
+		serveErrs := httpserver.Serve()
+
+		var err error
+		for err = range serveErrs {
+			httpErrorLogger.Err(err.Error())
+		}
+
+		httpdone <- err
+	}()
+	logger.Notice(fmt.Sprintf("serving http traffic on %s", httpserver.listener.Addr()))
+
+	done := make(chan error, 1)
+	go func() {
+		for sig := range sigch {
+			logger.Notice(fmt.Sprintf("received signal: %s", sig))
+			err := httpserver.Close()
+			if err != nil {
+				logger.Notice(fmt.Sprintf("error shutting down http server: %s", sig))
+				continue
+			}
+
+			signal.Stop(sigch)
+			break
+		}
+		done <- nil
+	}()
+
+	err = <-done
+	if err != nil {
+		logger.Crit(err.Error())
+		os.Exit(1)
 	}
 
-	err = http.ListenAndServe(":8080", http.DefaultServeMux)
-	logger.Err(err.Error())
+	err = <-httpdone
+	if err != nil {
+		logger.Crit(err.Error())
+		os.Exit(1)
+	}
+
+	logger.Notice("shut down complete")
+	os.Exit(0)
 }
 
 func Routes() http.Handler {
