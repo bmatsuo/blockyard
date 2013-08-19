@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export GOPATH="${PWD}"
+
 function error() {
     echo "$@" 1>&2
 }
