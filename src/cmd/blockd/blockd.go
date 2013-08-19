@@ -15,15 +15,10 @@ package main
 import (
 	"fmt"
 	"github.com/bmatsuo/go-syslog"
-	"io"
-	"net/http"
 	"os"
 	"os/signal"
-	"regexp"
-	"runtime"
 	"schnutil/log"
 	"schnutil/stat"
-	"strconv"
 	"syscall"
 	"time"
 )
@@ -38,27 +33,11 @@ func main() {
 	defer func() {
 		if e := recover(); e != nil {
 			logger.Crit("unhandled runtime panic: " + fmt.Sprint(e))
-			callers := make([]uintptr, 20)
-			n := runtime.Callers(1, callers)
-			for i := 0; i < n; i++ {
-				pc := callers[i]
-				fn := runtime.FuncForPC(pc)
-				if fn == nil {
-					logger.Crit(fmt.Sprintf("[i] unknown FuncForPC: %v", i, pc))
-				} else {
-					name := fn.Name()
-					file, line := fn.FileLine(pc)
-					offset := pc - fn.Entry()
-					frame := fmt.Sprintf("[%d] %s (%s:%v) +0x%X",
-						i, name, file, line, offset)
-					logger.Notice(frame)
-				}
-			}
-			os.Exit(1)
+			panic(e)
 		} else {
 			logger.Notice("shut down complete")
-			os.Exit(0)
 		}
+		panic("shut down")
 	}()
 
 	statdaemon := stat.NewRuntimeStatDaemon(30 * time.Second)
@@ -145,120 +124,4 @@ func main() {
 			break
 		}
 	}()
-}
-
-func Routes() http.Handler {
-	accesslogger, err := log.NewSyslog(syslog.LOG_NOTICE, "access")
-	if err != nil {
-		panic(err)
-	}
-
-	rBlockPath := regexp.MustCompile("(/[a-zA-Z0-9-_]+)+")
-
-	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-		method, path := req.Method, req.URL.Path
-		accesslogger.Notice(fmt.Sprintf("%s %q", method, path))
-		switch {
-		case method == "POST" && path == "/":
-			CreateBlock(resp, req)
-		case method == "DELETE" && rBlockPath.MatchString(path):
-			DeleteBlock(resp, req)
-		case method == "GET" && rBlockPath.MatchString(path):
-			GetBlock(resp, req)
-		default:
-			http.NotFound(resp, req)
-		}
-	})
-
-	return http.DefaultServeMux
-}
-
-func GetBlock(resp http.ResponseWriter, req *http.Request) {
-	blockid := req.URL.Path[1:]
-
-	block, err := NewService().Get(blockid)
-	if err != nil {
-		http.Error(resp, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	body, err := block.Open()
-	if err != nil {
-		http.Error(resp, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	defer body.Close()
-
-	_, err = io.Copy(resp, body)
-	if err != nil {
-		http.Error(resp, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func CreateBlock(resp http.ResponseWriter, req *http.Request) {
-	err := authenticate(req)
-	if err != nil {
-		http.Error(resp, "forbidden", http.StatusForbidden)
-		return
-	}
-
-	_length := req.Header.Get("Content-Length")
-	if _length == "" {
-		http.Error(resp, "missing header: Content-Length", http.StatusBadRequest)
-		return
-	}
-	length, err := strconv.ParseUint(_length, 10, 64)
-	if err != nil {
-		http.Error(resp, "invalid header: Content-Length", http.StatusBadRequest)
-	}
-
-	digest := req.Header.Get("Digest")
-	if digest == "" {
-		http.Error(resp, "missing header: Digest", http.StatusBadRequest)
-		return
-	}
-	digestPattern := regexp.MustCompile(`^SHA=(\S)$`)
-	matches := digestPattern.FindStringSubmatch(digest)
-	if len(matches) > 0 {
-		digest = matches[0]
-	} else {
-		http.Error(resp, "bad digest", http.StatusBadRequest)
-		return
-	}
-
-	_, err = NewService().Create(req.Body, length, digest)
-	req.Body.Close()
-	switch err {
-	case nil:
-		fmt.Println(resp, length)
-	case ErrTooLarge:
-		http.Error(resp, "post body too large", http.StatusRequestEntityTooLarge)
-	case ErrUnexpectedEOF:
-		http.Error(resp, "unexpected end of block", http.StatusBadRequest)
-	case ErrDigestMismatch:
-		http.Error(resp, err.Error(), http.StatusBadRequest)
-	default:
-		http.Error(resp, "internal failure", http.StatusInternalServerError)
-	}
-}
-
-func DeleteBlock(resp http.ResponseWriter, req *http.Request) {
-	err := authenticate(req)
-	if err != nil {
-		http.Error(resp, "forbidden", http.StatusForbidden)
-		return
-	}
-
-	blockid := req.URL.Path[1:]
-
-	err = NewService().Delete(blockid)
-	if err != nil {
-		http.Error(resp, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func authenticate(req *http.Request) error {
-	return nil
 }
