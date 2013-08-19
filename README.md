@@ -52,7 +52,7 @@ Docs
 ###Examples
 
     ./yard docs -http=:6060
-    ./yard docs schuntil/log NewSyslog
+    ./yard docs schnutil/log NewSyslog
 
 Author
 ------
