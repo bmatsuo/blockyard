@@ -13,12 +13,9 @@ of any other blockd nodes.
 package main
 
 import (
-	"crypto/sha1"
-	"encoding/base64"
 	"fmt"
 	"github.com/bmatsuo/go-syslog"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -178,7 +175,25 @@ func Routes() http.Handler {
 
 func GetBlock(resp http.ResponseWriter, req *http.Request) {
 	blockid := req.URL.Path[1:]
-	fmt.Fprint(resp, blockid)
+
+	block, err := NewService().Get(blockid)
+	if err != nil {
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	body, err := block.Open()
+	if err != nil {
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	defer body.Close()
+
+	_, err = io.Copy(resp, body)
+	if err != nil {
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func CreateBlock(resp http.ResponseWriter, req *http.Request) {
@@ -212,29 +227,20 @@ func CreateBlock(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// read request data and fork to file system and checksum
-	defer req.Body.Close()
-	hash := sha1.New()
-	tee := newTWriter(hash, ioutil.Discard)
-	err = copyN(tee, req.Body, length)
-	if err == errTooLarge {
+	_, err = NewService().Create(req.Body, length, digest)
+	req.Body.Close()
+	switch err {
+	case nil:
+		fmt.Println(resp, length)
+	case ErrTooLarge:
 		http.Error(resp, "post body too large", http.StatusRequestEntityTooLarge)
-	}
-	if err == errUnexpectedEOF {
+	case ErrUnexpectedEOF:
 		http.Error(resp, "unexpected end of block", http.StatusBadRequest)
-	}
-	if err != nil {
+	case ErrDigestMismatch:
+		http.Error(resp, err.Error(), http.StatusBadRequest)
+	default:
 		http.Error(resp, "internal failure", http.StatusInternalServerError)
-		return
 	}
-	computedDigest := base64.StdEncoding.EncodeToString(hash.Sum(nil))
-
-	if digest != computedDigest {
-		http.Error(resp, "digest mismatch", http.StatusBadRequest)
-		return
-	}
-
-	fmt.Println(resp, length)
 }
 
 func DeleteBlock(resp http.ResponseWriter, req *http.Request) {
@@ -245,93 +251,14 @@ func DeleteBlock(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	blockid := req.URL.Path[1:]
-	fmt.Fprint(resp, blockid)
+
+	err = NewService().Delete(blockid)
+	if err != nil {
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func authenticate(req *http.Request) error {
 	return nil
-}
-
-var errTooLarge = fmt.Errorf("too large")
-var errUnexpectedEOF = fmt.Errorf("unexpected eof")
-
-func copyN(w io.Writer, r io.Reader, n uint64) error {
-	bufSize := 4096
-	if n%uint64(bufSize) == 0 {
-		bufSize++
-	}
-
-	var totalread uint64
-	buf := make([]byte, bufSize)
-	for {
-		nread, err := r.Read(buf)
-		if err == io.EOF {
-			if nread == 0 {
-				break
-			}
-		} else if err != nil {
-			return err
-		}
-
-		_nwrite := nread
-		if totalread+uint64(nread) > n {
-			// pushed over just now.
-			_nwrite = int(n - totalread)
-		}
-		totalread += uint64(nread)
-
-		_, err = w.Write(buf[:_nwrite])
-		if err != nil {
-			return err
-		}
-
-		if totalread > n {
-			return errTooLarge
-		}
-	}
-
-	if totalread < n {
-		return errUnexpectedEOF
-	}
-
-	return nil
-}
-
-type writeResponse struct {
-	id  int
-	n   int
-	err error
-}
-
-type tWriter struct {
-	resp       chan writeResponse
-	out1, out2 io.Writer
-}
-
-func newTWriter(out1, out2 io.Writer) *tWriter {
-	return &tWriter{
-		resp: make(chan writeResponse, 0),
-		out1: out1,
-		out2: out2,
-	}
-}
-
-func (w tWriter) Write(p []byte) (n int, err error) {
-	go func() {
-		n, err := w.out1.Write(p)
-		w.resp <- writeResponse{1, n, err}
-	}()
-	go func() {
-		n, err := w.out2.Write(p)
-		w.resp <- writeResponse{1, n, err}
-	}()
-	resp1 := <-w.resp
-	resp2 := <-w.resp
-	if resp1.err != nil {
-		return resp1.n, resp1.err
-	}
-	if resp2.err != nil {
-		return resp2.n, resp2.err
-	}
-	return len(p), nil
 }
