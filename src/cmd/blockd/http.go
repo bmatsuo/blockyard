@@ -7,8 +7,10 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -45,6 +47,17 @@ func NewHTTPServer(listnr net.Listener) *HTTPServer {
 	return server
 }
 
+type RecoveredError struct {
+	pc   uintptr
+	file string
+	line int
+	val  interface{}
+}
+
+func (err RecoveredError) Error() string {
+	return fmt.Sprintf("%v (%s:%d)", err.val, err.file, err.line)
+}
+
 // an error received through the returned channel signals that the server
 // entered into an unrecoverable state and halted.
 func (server *HTTPServer) Serve() <-chan error {
@@ -58,6 +71,17 @@ func (server *HTTPServer) Serve() <-chan error {
 			server.waitactive.Add(1)
 			defer server.waitactive.Done()
 
+			defer func() {
+				// panics in HTTP actions cannot crash the server.
+				if r := recover(); r != nil {
+					pc, file, line, ok := runtime.Caller(1)
+					if ok {
+						errch <- RecoveredError{pc, file, line, r}
+					} else {
+						errch <- RecoveredError{pc, "???", -1, r}
+					}
+				}
+			}()
 			server.Handler.ServeHTTP(resp, req)
 		})
 
