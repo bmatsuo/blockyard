@@ -9,8 +9,12 @@ A REST block storage service. Blockd is designed to be a node in a distributed
 file system. The blocks it store are parts of files. But, the entire file is
 rarely stored entirely on one node. Blockd nodes are ignorant about the presence
 of any other blockd nodes.
+
+Currently always panics on exit for goroutine stack inspection.
 */
 package main
+
+// BUG(bmatsuo): the signal package runs a forever goroutine; leads to dirty stack dumps
 
 import (
 	"fmt"
